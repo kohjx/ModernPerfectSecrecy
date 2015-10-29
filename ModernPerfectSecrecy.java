@@ -31,8 +31,6 @@ public class ModernPerfectSecrecy {
 	private static final int NUM_OF_BITS_PER_BLOCK_FILE = 32;
 	private static final int NUM_OF_BITS_PER_BLOCK_ORDERWHICH = 8;
 
-	
-	
 	private static Scanner sc;
 	
 	public ModernPerfectSecrecy() {
@@ -45,16 +43,21 @@ public class ModernPerfectSecrecy {
 	public void generateNonce() {
 		System.out.println();
         try {
+        	long unixTime = System.currentTimeMillis() / 1000L;
+        	String unixTimeHex = Long.toHexString(unixTime);
+        	
             // Initialize a secure random number generator
             SecureRandom secureRandom = SecureRandom.getInstance("SHA1PRNG");
-
-            StringBuilder sb = new StringBuilder(MAX_LENGTH_BIT);
-            for (int i = 0; i < MAX_LENGTH_BIT; i++) {
+            int randomBitLength = MAX_LENGTH_BIT - 32;
+            StringBuilder sb = new StringBuilder(randomBitLength);
+            for (int i = 0; i < randomBitLength; i++) {
                 sb.append(secureRandom.nextInt(2));
             }
-            System.out.println("Nonce(binary): " + sb.toString());
+            
             BigInteger bigInteger = new BigInteger(sb.toString(), 2);
-            System.out.println("Nonce(hex)   : " + bigInteger.toString(16));
+            String hex = bigInteger.toString(16);
+            System.out.println("Nonce(binary): " + sb.toString() + Long.toBinaryString(unixTime));
+            System.out.println("Nonce(hex)   : " + hex + unixTimeHex);
 
         } catch (NoSuchAlgorithmException noSuchAlgo) {
             System.out.println("NoSuchAlgorithmException:" + noSuchAlgo);
