@@ -1,40 +1,62 @@
 import os
 import sys
+import time
 import hashlib
+import numpy
 
-SIZE_OF_BLOCK = 512
-SIZE_OF_INTEGER = 8
-SIZE_OF_BLOCK_FOR_FILE = pow(2,SIZE_OF_INTEGER)* SIZE_OF_INTEGER
+SIZE_OF_BLOCK = 512 #bits
+SIZE_OF_INTEGER = 8 #bits
+SIZE_OF_BLOCK_FOR_FILE = pow(2,SIZE_OF_INTEGER)* SIZE_OF_INTEGER #bits
+BLOCK_FOR_FILE_BITS = SIZE_OF_BLOCK_FOR_FILE >> 3 #bits
+NUMBER_OF_BLOCKS = pow(2,SIZE_OF_INTEGER)
+LENGTH_OF_BLOCK = SIZE_OF_BLOCK/4 #64 bytes, 128 characters
+MODULUS = NUMBER_OF_BLOCKS
 
-def generateSessionKey(hashedSecretKey, blockIndex, *filePaths):
+def generateBlockKey(hashedSecretKey, numberOfBlocks, *filePaths):
 	filechunks = []
 
 	for index,filePath in enumerate(filePaths):
+		filechunks.append([])
 		f = file(filePath,"rb")
-		f.seek(blockIndex*SIZE_OF_BLOCK_FOR_FILE/8)
-		filechunks.append(list(chunks(f.read(SIZE_OF_BLOCK_FOR_FILE/8).encode('hex'),2)))
+		while len(filechunks[index]) < numberOfBlocks:
+			filechunks[index].append(f.read(BLOCK_FOR_FILE_BITS).encode('hex'))
+	
+	secretKeyChunks = hashedSecretKey
+	blockKeys = []
+	currBlock = 0
+	length = len(secretKeyChunks)
 
-	secretKeyChunks = chunks(hashedSecretKey,2)
-	orderMapping = [None]*(pow(2,SIZE_OF_INTEGER))
-	MODULUS = pow(2,SIZE_OF_INTEGER)
+	index = 0
+	secretKey_Which = []
+	orderMapping = [None]*NUMBER_OF_BLOCKS
 
-	sessionKey = []
-	# 8 bit integer in secret key
-	for index in secretKeyChunks:
-		value = int(index,16)
-		# collision resolution
-		while orderMapping[value] == 1:
+	while index < length:
+		value = int(secretKeyChunks[index:index+2],16)
+		#collision resolution
+		while orderMapping[value]:
 			value = (value + 1) % MODULUS
+		
 		orderMapping[value]=1
+		secretKey_Which.append(value)
+		index += 2
 
-		index_of_block = value
-		# file chaining
-		for individualFile in filechunks:
-			index_of_block = int(individualFile[index_of_block],16)
-		sessionKey.append(("%.2x"%index_of_block))
-	sessionKey = ''.join(sessionKey)
 
-	return sessionKey
+	while currBlock < numberOfBlocks:
+		blockKey = ""
+		# 8 bit integer in secret key
+		index = 0
+		while index < length:
+			index_of_block = secretKey_Which[index>>1]
+			# file chaining
+			for individualFile in filechunks:
+				offset = index_of_block
+				index_of_block = int(individualFile[currBlock][offset:offset+2],16)
+			blockKey += individualFile[currBlock][offset:offset+2]
+			index += 2
+		blockKeys.append(blockKey)
+		currBlock+=1
+
+	return blockKeys
 
 def chunks(l, n):
     for i in xrange(0, len(l), n):
@@ -60,16 +82,20 @@ def encrypt(secretKey, nonce1, nonce2, plaintextFile, *filePaths):
 	print "Secret Key: %s"%secretKey
 	sessionSecretKey = protectSecretKey(secretKey,nonce1,nonce2)
 	print "-" * 80
+
 	plaintext = file(plaintextFile, "rb").read()
 	plaintextHex = plaintext.encode('hex')
-	plaintextChunks = chunks(plaintextHex,SIZE_OF_BLOCK/8*2)
+	plaintextChunks = list(chunks(plaintextHex,LENGTH_OF_BLOCK))
+
+	blockKeys = generateBlockKey(sessionSecretKey,len(plaintextChunks), *filePaths)
 
 	cipherText = ""
 	for index,plainChunk in enumerate(plaintextChunks):
-		sessionKeyForChunk = generateSessionKey(sessionSecretKey, index, *filePaths)
-		paddedPlainChunk =  plainChunk.ljust(SIZE_OF_BLOCK/8*2,'0')
-		cipherTextForChunk = "%.128x"% (int(paddedPlainChunk,16) ^ int(sessionKeyForChunk,16))
+		sessionKeyForChunk = blockKeys[index]
+		paddedPlainChunk = plainChunk.ljust(LENGTH_OF_BLOCK,'0')
+		cipherTextForChunk = "%.128x"%(int(paddedPlainChunk,16) ^ int(sessionKeyForChunk,16))
 		cipherText += cipherTextForChunk
+
 	return cipherText
 
 def encryptCBC(secretKey, nonce1, nonce2, plaintextFile, *filePaths):
@@ -78,16 +104,19 @@ def encryptCBC(secretKey, nonce1, nonce2, plaintextFile, *filePaths):
 	print "-" * 80
 	plaintext = file(plaintextFile, "rb").read()
 	plaintextHex = plaintext.encode('hex')
-	plaintextChunks = chunks(plaintextHex,SIZE_OF_BLOCK/8*2)
+	plaintextChunks = list(chunks(plaintextHex,LENGTH_OF_BLOCK))
+
+	blockKeys = generateBlockKey(sessionSecretKey,len(plaintextChunks), *filePaths)
 
 	cipherText = ""
 	previousCipherText = 0
 	for index,plainChunk in enumerate(plaintextChunks):
-		sessionKeyForChunk = generateSessionKey(sessionSecretKey, index, *filePaths)
-		paddedPlainChunk =  plainChunk.ljust(SIZE_OF_BLOCK/8*2,'0')
+		sessionKeyForChunk = blockKeys[index]
+		paddedPlainChunk =  plainChunk.ljust(LENGTH_OF_BLOCK,'0')
 		cipherTextForChunk = "%.128x"% (previousCipherText^int(paddedPlainChunk,16) ^ int(sessionKeyForChunk,16))
 		previousCipherText = int(cipherTextForChunk,16)
 		cipherText += cipherTextForChunk
+
 	return cipherText
 
 def decryptCBC(secretKey, nonce1, nonce2, cipherTextFile, *filePaths):
@@ -96,12 +125,14 @@ def decryptCBC(secretKey, nonce1, nonce2, cipherTextFile, *filePaths):
 	print "-" * 80
 	cipherText = file(cipherTextFile, "rb").read()
 	cipherTextHex = cipherText.encode('hex')
-	cipherTextChunks = chunks(cipherTextHex,SIZE_OF_BLOCK/8*2)
+	cipherTextChunks = list(chunks(cipherTextHex,LENGTH_OF_BLOCK))
+
+	blockKeys = generateBlockKey(sessionSecretKey,len(cipherTextChunks), *filePaths)
 
 	plainText = ""
 	previousCipherText = 0
 	for index,cipherChunk in enumerate(cipherTextChunks):
-		sessionKeyForChunk = generateSessionKey(sessionSecretKey, index, *filePaths)
+		sessionKeyForChunk = blockKeys[index]
 		plainTextForChunk = "%.128x"% (previousCipherText^int(cipherChunk,16) ^ int(sessionKeyForChunk,16))
 		previousCipherText = int(cipherChunk,16)
 		plainText += plainTextForChunk
@@ -142,15 +173,11 @@ def sampleBMP():
 	temp.write(cipherText.decode('hex'))
 	temp.close()
 
-	cipherText= encryptCBC(secretKey, nonce1, nonce2, "sample.bmp", "file1.m4a","file2.avi")
-	temp = file("./encryptedSampleCBC.bmp","wb")
-	temp.write(cipherText.decode('hex'))
-	temp.close()
-
-
 def main(argv):
 	sampleECB()
+	sampleCBC()
 	sampleBMP()
+
 
 if __name__ == "__main__":
 	main(sys.argv)
