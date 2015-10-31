@@ -93,7 +93,8 @@ def encrypt(secretKey, nonce1, nonce2, plaintextFile, *filePaths):
 	for index,plainChunk in enumerate(plaintextChunks):
 		sessionKeyForChunk = blockKeys[index]
 		paddedPlainChunk = plainChunk.ljust(LENGTH_OF_BLOCK,'0')
-		cipherTextForChunk = "%.128x"%(int(paddedPlainChunk,16) ^ int(sessionKeyForChunk,16))
+		cipherTextForChunk = "%x"%(int(paddedPlainChunk,16) ^ int(sessionKeyForChunk,16))
+		cipherTextForChunk = cipherTextForChunk.rjust(LENGTH_OF_BLOCK,'0')
 		cipherText += cipherTextForChunk
 
 	return cipherText
@@ -113,8 +114,8 @@ def encryptCBC(secretKey, nonce1, nonce2, plaintextFile, *filePaths):
 	for index,plainChunk in enumerate(plaintextChunks):
 		sessionKeyForChunk = blockKeys[index]
 		paddedPlainChunk =  plainChunk.ljust(LENGTH_OF_BLOCK,'0')
-		cipherTextForChunk = "%.128x"% (previousCipherText^int(paddedPlainChunk,16) ^ int(sessionKeyForChunk,16))
-		previousCipherText = int(cipherTextForChunk,16)
+		cipherTextForChunk = "%x"%(previousCipherText ^ int(paddedPlainChunk,16) ^ int(sessionKeyForChunk,16))
+		cipherTextForChunk = cipherTextForChunk.rjust(LENGTH_OF_BLOCK,'0')
 		cipherText += cipherTextForChunk
 
 	return cipherText
@@ -133,8 +134,8 @@ def decryptCBC(secretKey, nonce1, nonce2, cipherTextFile, *filePaths):
 	previousCipherText = 0
 	for index,cipherChunk in enumerate(cipherTextChunks):
 		sessionKeyForChunk = blockKeys[index]
-		plainTextForChunk = "%.128x"% (previousCipherText^int(cipherChunk,16) ^ int(sessionKeyForChunk,16))
-		previousCipherText = int(cipherChunk,16)
+		plainTextForChunk = "%x"% (previousCipherText^int(cipherChunk,16) ^ int(sessionKeyForChunk,16))
+		plainTextForChunk = plainTextForChunk.rjust(LENGTH_OF_BLOCK,'0')
 		plainText += plainTextForChunk
 	return plainText
 
@@ -176,7 +177,10 @@ def sampleBMP():
 def main(argv):
 	sampleECB()
 	sampleCBC()
+	n1 = time.time()
 	sampleBMP()
+	n2 = time.time()
+	print "time taken: %f" % (n2-n1)
 
 
 if __name__ == "__main__":
