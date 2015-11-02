@@ -20,7 +20,7 @@ def generateBlockKey(hashedSecretKey, numberOfBlocks, *filePaths):
 		f = file(filePath,"rb")
 		while len(filechunks[index]) < numberOfBlocks:
 			filechunks[index].append(f.read(BLOCK_FOR_FILE_BITS).encode('hex'))
-	
+
 	secretKeyChunks = hashedSecretKey
 	blockKeys = []
 	currBlock = 0
@@ -86,7 +86,7 @@ def encrypt(secretKey, nonce1, nonce2, plaintextFile, *filePaths):
 	plaintext = file(plaintextFile, "rb").read()
 	plaintextHex = plaintext.encode('hex')
 	plaintextChunks = list(chunks(plaintextHex,LENGTH_OF_BLOCK))
-
+	
 	blockKeys = generateBlockKey(sessionSecretKey,len(plaintextChunks), *filePaths)
 
 	cipherText = ""
