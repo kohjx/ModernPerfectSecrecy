@@ -21,7 +21,7 @@ struct node {
   struct node *next;
 };
 
-unsigned char** generateBlockKey(char* sessionKey,int numberOfChunks,int numOfFile, va_list argptr) {
+unsigned char** generateBlockKey(char* sessionKey,int numberOfChunks,int numOfFile, char** listOfFiles) {
 
 	//We only require numberOfChunks from each file
 	char*** filechunks = malloc(sizeof(char**) * numOfFile);
@@ -39,7 +39,7 @@ unsigned char** generateBlockKey(char* sessionKey,int numberOfChunks,int numOfFi
 	}
 
 	for (i = 0;i < numOfFile; ++i) {
-		char* filePath = va_arg(argptr, char*);
+		char* filePath = listOfFiles[i];
 		char* mode = "rb";
 		FILE* inputFile = fopen(filePath, mode);
 
@@ -109,7 +109,7 @@ char* generateSessionSecretKey(char* secretKey,char* nonce1,char* nonce2) {
 	return sessionKey;
 }
 
-unsigned char* encrypt(char* secretKey, char* nonce1, char* nonce2, char* plaintextFile, int numOfFile, ...) {
+unsigned char* encrypt(char* secretKey, char* nonce1, char* nonce2, char* plaintextFile, int numOfFile, char** listOfFiles) {
 	char* sessionKey = generateSessionSecretKey(secretKey, nonce1, nonce2);
 
 	char* mode = "rb";
@@ -140,10 +140,7 @@ unsigned char* encrypt(char* secretKey, char* nonce1, char* nonce2, char* plaint
 	}
 	fclose(inputFile);
 
-	va_list argptr;
-	va_start(argptr, numOfFile);
-	unsigned char**  blockKeys = generateBlockKey(sessionKey,numberOfChunks,numOfFile, argptr);
-	va_end(argptr);
+	unsigned char**  blockKeys = generateBlockKey(sessionKey,numberOfChunks,numOfFile, listOfFiles);
 
 	unsigned char* cipherText= malloc(numberOfChunks*LENGTH_OF_BLOCK_IN_BYTES+1);
 	cur = root;
@@ -213,7 +210,13 @@ int main(int argc, char* argv[]) {
 	char* nonce1 = readFile(nonce1Path);
 	char* nonce2 = readFile(nonce2Path);
 
-	encrypt(secretKey,nonce1,nonce2,plaintextPath,(argc-5),argv[5]);
+	char** listOfFiles = malloc(sizeof(char*) * (argc-5));
+	int i;
+	for (i=0;i<argc-5;++i) {
+		listOfFiles[i] = argv[i+5];
+	}
+
+	encrypt(secretKey,nonce1,nonce2,plaintextPath,(argc-5),listOfFiles);
 	return 0;
 }
 
