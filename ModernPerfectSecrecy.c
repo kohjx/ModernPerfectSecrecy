@@ -72,7 +72,7 @@ unsigned char** generateBlockKey(char* sessionKey,int numberOfChunks,int numOfFi
 
 	unsigned char ** blockKeys = malloc( sizeof(char*) * (numberOfChunks));
 	for (i=0; i< numberOfChunks;++i) {
-		if ( (blockKeys[i] = malloc(lengthOfBlockKey+1)) == NULL) {
+		if ((blockKeys[i] = malloc(lengthOfBlockKey+1)) == NULL) {
 
 		}
 	}
@@ -88,29 +88,46 @@ unsigned char** generateBlockKey(char* sessionKey,int numberOfChunks,int numOfFi
 				unsigned char next_index = filechunks[fileIndex][i][indexOfBlock];
 				indexOfBlock = next_index;
 			}
+			//printf("%d ", indexOfBlock);
 			blockKeys[i][index] = indexOfBlock;
 		}
 	}
 
+
 	return blockKeys;
 }
 
+unsigned int hexValue(char c) {
+	if (c >= '0' && c <= '9') { return c - '0';      }
+    if (c >= 'a' && c <= 'f') { return c - 'a' + 10; }
+    if (c >= 'A' && c <= 'F') { return c - 'A' + 10; }
+    return -1;
+}
+
+char asciiValue(int i) {
+	if (i<10) {
+		return i+'0'; 
+	}
+	else { 
+		return i+'a'-10; 
+	}
+}
+
 char* generateSessionSecretKey(char* secretKey,char* nonce1,char* nonce2) {
-	long long secretKey_int = (int) strtoll(secretKey,NULL,16);
-	long long nonce1_int = (int)strtoll(nonce1,NULL,16);
-	long long nonce2_int = (int)strtoll(nonce2,NULL,16);
-
-	secretKey_int = secretKey_int ^ nonce1_int ^ nonce2_int;
-	char* sessionKey = malloc(LENGTH_OF_BLOCK_IN_BYTES+1);
-	snprintf(sessionKey, LENGTH_OF_BLOCK_IN_BYTES+1,"%64llX", secretKey_int);
-
-	SHA512(sessionKey, sizeof(sessionKey)-1, sessionKey); 
-
-	return sessionKey;
+	char* sessionKey = malloc(LENGTH_OF_BLOCK+1);
+	char* hash = malloc(SHA512_DIGEST_LENGTH);
+	int i = 0;
+	for (i =0;i<128;++i){
+		sessionKey[i] = asciiValue(hexValue(secretKey[i]) ^ hexValue(nonce1[i]) ^ hexValue(nonce2[i]));
+	}
+	sessionKey[128] = 0;
+	SHA512(sessionKey, 128, hash); 
+	return &hash[0];
 }
 
 unsigned char* encrypt(char* secretKey, char* nonce1, char* nonce2, char* plaintextFile, int numOfFile, char** listOfFiles) {
 	char* sessionKey = generateSessionSecretKey(secretKey, nonce1, nonce2);
+	int i = 0;
 
 	char* mode = "rb";
 	FILE* inputFile = fopen(plaintextFile, mode);
@@ -130,7 +147,7 @@ unsigned char* encrypt(char* secretKey, char* nonce1, char* nonce2, char* plaint
     fseek(inputFile, 0, SEEK_SET);
 
 	int numberOfChunks = ceil((double)f_size/LENGTH_OF_BLOCK_IN_BYTES);
-	int i = 0;
+	
 	while (!feof(inputFile) && i < numberOfChunks) {
 		i++;
 		fread(cur->data, 1, LENGTH_OF_BLOCK_IN_BYTES, inputFile);
@@ -150,7 +167,6 @@ unsigned char* encrypt(char* secretKey, char* nonce1, char* nonce2, char* plaint
 	while(cur->next != NULL) {
 		unsigned char* blockKey = blockKeys[i];
 		unsigned char* data = (unsigned char*)cur->data;
-
 		unsigned char result[LENGTH_OF_BLOCK_IN_BYTES];
 
 		int index;
@@ -158,12 +174,13 @@ unsigned char* encrypt(char* secretKey, char* nonce1, char* nonce2, char* plaint
 			x++;
 			int offset = i * LENGTH_OF_BLOCK_IN_BYTES;
 			cipherText[offset+index] = blockKey[index] ^ data[index];
+			printf("%c", cipherText[offset+index]);
 		}
 		cur = cur->next;
 		i++;
 	}
 
-	fwrite(cipherText, 1, f_size, stdout);
+	//fwrite(cipherText, 1, f_size, stdout);
 
 	return cipherText;
 }

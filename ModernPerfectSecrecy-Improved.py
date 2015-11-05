@@ -40,7 +40,6 @@ def generateBlockKey(hashedSecretKey, numberOfBlocks, *filePaths):
 		secretKey_Which.append(value)
 		index += 2
 
-
 	while currBlock < numberOfBlocks:
 		blockKey = ""
 		# 8 bit integer in secret key
@@ -49,7 +48,7 @@ def generateBlockKey(hashedSecretKey, numberOfBlocks, *filePaths):
 			index_of_block = secretKey_Which[index>>1]
 			# file chaining
 			for individualFile in filechunks:
-				offset = index_of_block
+				offset = index_of_block<<1
 				index_of_block = int(individualFile[currBlock][offset:offset+2],16)
 			blockKey += individualFile[currBlock][offset:offset+2]
 			index += 2
@@ -145,13 +144,16 @@ def sampleECB():
 	secretKey = file("secretkey","rb").read()
 	nonce1 = file("nonce1","rb").read()
 	nonce2 = file("nonce2","rb").read()
-	cipherText= encrypt(secretKey, nonce1, nonce2, "samplePlainText.txt", "file1.m4a","file2.avi")
+	cipherText= encrypt(secretKey, nonce1, nonce2, "samplePlainText.txt", "file1.m4a")
 	print "CipherText: %s"%cipherText.decode('hex')
 	temp = file("/tmp/input","wb")
 	temp.write(cipherText.decode('hex'))
 	temp.close()
 	print "-" * 80
-	print "PlainText: %s"%encrypt(secretKey, nonce1, nonce2, "/tmp/input", "file1.m4a","file2.avi").decode('hex')	
+	#print "PlainText: %s"%encrypt(secretKey, nonce1, nonce2, "output.txt", "file1.m4a").decode('hex')	
+	temp = file("decrypt.bmp","wb")
+	temp.write(encrypt(secretKey, nonce1, nonce2, "output.txt", "file1.m4a").decode('hex'))
+	temp.close()
 
 def sampleCBC():
 	secretKey = file("secretkey","rb").read()
@@ -176,11 +178,6 @@ def sampleBMP():
 
 def main(argv):
 	sampleECB()
-	sampleCBC()
-	n1 = time.time()
-	sampleBMP()
-	n2 = time.time()
-	print "time taken: %f" % (n2-n1)
 
 
 if __name__ == "__main__":
